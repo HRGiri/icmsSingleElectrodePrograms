@@ -1,6 +1,11 @@
 % Display All Channels after grouping them based on electrode distance from
 % the stimulation electrode.
 
+% This function accepts both single session and multiple sessions.
+% For multiple sessions, use cells for expData, protocolName and
+% stimulationElectrode
+% e.g. expDate = {'281025', '301025'}
+
 % In these protocols
 % azimuth is mapped to amplitude of the stimulation
 % elevation is mapped to the frequency of stimulation (in the old version,
@@ -16,7 +21,14 @@ if ~exist('useCommonBadTrialsFlag','var'); useCommonBadTrialsFlag = 1;  end
 
 gridType = 'Microelectrode';
 
-folderName = fullfile(folderSourceString,'data',subjectName,gridType,expDate,protocolName);
+if (ischar(expDate))
+    expDate = {expDate};
+    protocolName = {protocolName};
+    stimulationElectrode = {stimulationElectrode};
+end
+
+% Load Parameter combinations
+folderName = fullfile(folderSourceString,'data',subjectName,gridType,expDate{1},protocolName{1});
 
 % Get folders
 folderExtract = fullfile(folderName,'extractedData');
@@ -24,6 +36,28 @@ folderExtract = fullfile(folderName,'extractedData');
 % Get Combinations
 [~,aValsUnique,eValsUnique,sValsUnique,...
     fValsUnique,oValsUnique,cValsUnique,tValsUnique] = loadParameterCombinations(folderExtract);
+
+% Check for consistency
+for i=2:length(expDate)
+    folderName = fullfile(folderSourceString,'data',subjectName,gridType,expDate{i},protocolName{i});
+
+    % Get folders
+    folderExtract = fullfile(folderName,'extractedData');
+    
+    % Get Combinations
+    [~,aValsUnique_,eValsUnique_,sValsUnique_,...
+        fValsUnique_,oValsUnique_,cValsUnique_,tValsUnique_] = loadParameterCombinations(folderExtract);
+    
+    if (~isequal(aValsUnique, aValsUnique_) ||...
+            ~isequal(eValsUnique,eValsUnique_) ||...
+            ~isequal(sValsUnique,sValsUnique_) ||...
+            ~isequal(fValsUnique,fValsUnique_) ||...
+            ~isequal(oValsUnique,oValsUnique_) ||...
+            ~isequal(cValsUnique,cValsUnique_) ||...
+            ~isequal(tValsUnique,tValsUnique_))
+        error('Parameter combinations not consistent across sessions');
+    end
+end
 
 % Guess the type of protocol
 if ~isscalar(aValsUnique) && isscalar(eValsUnique) && isscalar(tValsUnique)
@@ -270,55 +304,78 @@ uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
 % Show electrode array and bad channels
 % Get Bad channels from the main impedance file
 
-impedanceFileName = fullfile(folderSourceString,'data',subjectName,gridType,expDate,'impedanceValues.mat');
 badImpedanceCutoff = 2500;
-
-if exist(impedanceFileName,'file')
-    impedanceValues = getImpedanceValues(impedanceFileName);
-    badChannels = [find(impedanceValues>badImpedanceCutoff) find(isnan(impedanceValues))];
-else
-    disp('Could not find impedance values');
-    badChannels=[];
+for i=1:length(expDate)
+    impedanceFileName = fullfile(folderSourceString,'data',subjectName,gridType,expDate{i},'impedanceValues.mat');    
+    
+    if exist(impedanceFileName,'file')
+        impedanceValues = getImpedanceValues(impedanceFileName);
+        badChannels = [find(impedanceValues>badImpedanceCutoff) find(isnan(impedanceValues))];
+    else
+        disp(['Could not find impedance values for ' expDate{i}]);
+        badChannels=[];
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%% Get good electrode lists %%%%%%%%%%%%%%%%%%%%%%%%%
 electrodeGridPos = [staticStartPos panelStartHeight staticPanelWidth panelHeight];
 [~,~,electrodeArray] = electrodePositionOnGrid(1,gridType,subjectName);
-[electrodeGroupList,groupNameList,goodElectrodes] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode,badChannels);
-
-numElectrodeGroups = length(electrodeGroupList);
-colorNamesElectrodeGroups = copper(numElectrodeGroups);
-for iG=1:numElectrodeGroups
-    hElectrodes = showElectrodeLocations(electrodeGridPos,electrodeGroupList{iG},colorNamesElectrodeGroups(iG,:),[],1,0,gridType,subjectName);
-    text(hElectrodes,-0.35,iG/10,groupNameList{iG},'color',colorNamesElectrodeGroups(iG,:),'unit','normalized');
+for i=1:length(stimulationElectrode)
+    [electrodeGroupList{i},groupNameList{i},goodElectrodes{i}] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode{i},badChannels);
+    
+    numElectrodeGroups(i) = length(electrodeGroupList{i});
 end
+[maxNumElectrodeGroups, idx] = max(numElectrodeGroups);
+colorNamesElectrodeGroups = copper(maxNumElectrodeGroups);
 
-if ~isempty(badChannels)
-    showElectrodeLocations(electrodeGridPos,badChannels,'r',[],1,0,gridType,subjectName);
-    text(hElectrodes,-0.35,1,'Bad','color','r','unit','normalized');
+if (isscalar(stimulationElectrode))
+    % Single electrode condition
+    for iG=1:numElectrodeGroups(1)
+        hElectrodes = showElectrodeLocations(electrodeGridPos,electrodeGroupList{1}{iG},colorNamesElectrodeGroups(iG,:),[],1,0,gridType,subjectName);
+        text(hElectrodes,-0.35,iG/10,groupNameList{1}{iG},'color',colorNamesElectrodeGroups(iG,:),'unit','normalized');
+    end
+
+    if ~isempty(badChannels)
+        showElectrodeLocations(electrodeGridPos,badChannels,'r',[],1,0,gridType,subjectName);
+        text(hElectrodes,-0.35,1,'Bad','color','r','unit','normalized');
+    end
+
+else
+    hElectrodes = subplot('Position',electrodeGridPos,'XTickLabel',[],'YTickLabel',[],'XTick',[],'YTick',[],'box','on');
+    theta = linspace(0, 2*pi, 100); % Angles from 0 to 2*pi
+    radii = linspace(5, 50, maxNumElectrodeGroups); % Radii is only for number of ellipses
+    hold on;
+    for iG = maxNumElectrodeGroups:-1:1
+        r = radii(iG);
+        x = r * cos(theta);
+        y = r * sin(theta);        
+        fill(x, y, colorNamesElectrodeGroups(iG,:), 'EdgeColor', 'flat');
+        text(hElectrodes,-0.35,iG/10,groupNameList{idx}{iG},'color',colorNamesElectrodeGroups(iG,:),'unit','normalized');
+    end
+    % axis equal; % To make circle
+    hold off;
 end
-
 % Get main plots and message handles
-
-hERP = getPlotHandles(numElectrodeGroups,1,[0.05 0.05 0.1 0.6]);
-hFR  = getPlotHandles(numElectrodeGroups,1,[0.175 0.05 0.1 0.6]);
-hDeltaPSD = getPlotHandles(numElectrodeGroups,1,[0.3 0.05 0.1 0.6]);
-hDeltaTF  = getPlotHandles(numElectrodeGroups,numConditions,[0.425 0.05 0.55 0.6]);
+hERP = getPlotHandles(maxNumElectrodeGroups,1,[0.05 0.05 0.1 0.6]);
+hFR  = getPlotHandles(maxNumElectrodeGroups,1,[0.175 0.05 0.1 0.6]);
+hDeltaPSD = getPlotHandles(maxNumElectrodeGroups,1,[0.3 0.05 0.1 0.6]);
+hDeltaTF  = getPlotHandles(maxNumElectrodeGroups,numConditions,[0.425 0.05 0.55 0.6]);
 
 uicontrol('Unit','Normalized','Position',[0 0.975 1 0.025],'Style','text',...
     'String',[subjectName expDate protocolName],'FontSize',fontSizeSmall);
 
 %%%%%%%%%%%%%%%%%%%%%% Get data from  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-numGoodElectrodes = length(goodElectrodes);
-allData = cell(1,numGoodElectrodes);
-
-for i=1:numGoodElectrodes
-    channelString = ['elec' num2str(goodElectrodes(i))];
-    disp(['Getting data: ' num2str(i) ' of ' num2str(numGoodElectrodes) ', ' channelString]);
-
-    allData{i} = getSpikeLFPDataSingleChannel(subjectName,expDate,protocolName,folderSourceString,channelString,0,gridType,[],referenceChannelString,badTrialNameStr,useCommonBadTrialsFlag);
-end        
-
+numStimulationElectrodes = length(stimulationElectrode);
+numGoodElectrodes = length(goodElectrodes{1});
+allData = cell(numStimulationElectrodes,numGoodElectrodes);
+for j=1:numStimulationElectrodes
+    for i=1:numGoodElectrodes
+        channelString = ['elec' num2str(goodElectrodes{j}(i))];
+        disp(['Getting data: ' num2str((j-1)*numGoodElectrodes + i) ' of ' num2str(numStimulationElectrodes * numGoodElectrodes) ', ' channelString ' of ' protocolName{j} ', ' expDate{j}]);
+    
+        allData{j,i} = getSpikeLFPDataSingleChannel(subjectName,expDate{j},protocolName{j},folderSourceString,channelString,0,gridType,[],referenceChannelString,badTrialNameStr,useCommonBadTrialsFlag);
+    end        
+end
 colormap jet;
 colorNames = jet(numConditions);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -347,26 +404,30 @@ colorNames = jet(numConditions);
                 a = 1; e = iCond; t = 1;
             end
 
-            for iGroup = 1:numElectrodeGroups
+            numElectrodesInGroup = zeros(1, maxNumElectrodeGroups);
+            for iGroup = 1:maxNumElectrodeGroups
 
-                % Get data from electrodes
-                tmpElectrodes = electrodeGroupList{iGroup};
+                % Get data from electrodes                   
+                for session=1:size(electrodeGroupList,2)
+                    tmpElectrodes{session} = electrodeGroupList{session}{iGroup};   %#ok<*AGROW>
+                    numElectrodesInGroup(iGroup) = numElectrodesInGroup(iGroup) + length(tmpElectrodes{session});
+                end
                 
                 if ~isempty(tmpElectrodes)
 
-                    numTmpElectrodes = length(tmpElectrodes);
-
-                    if numTmpElectrodes > 1 % Combine across electrodes
+                    if numElectrodesInGroup(iGroup) > 1 % Combine across electrodes
 
                         tmpERPData = []; tmpFRData = []; tmpDeltaPSD = []; tmpDeltaTF = [];
 
-                        for k = 1:numTmpElectrodes
-                            tmpData = getDataGRF(allData{tmpElectrodes(k)==goodElectrodes},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
+                        for session = 1:length(tmpElectrodes)                           
+                            for k = 1:length(tmpElectrodes{session})
+                                tmpData = getDataGRF(allData{session,tmpElectrodes{session}(k)==goodElectrodes{session}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
 
-                            tmpERPData = cat(1,tmpERPData,tmpData.erp);
-                            tmpFRData = cat(1,tmpFRData,tmpData.frVals);
-                            tmpDeltaPSD = cat(1,tmpDeltaPSD,tmpData.deltaPSD');
-                            tmpDeltaTF = cat(3,tmpDeltaTF,tmpData.deltaTF);
+                                tmpERPData = cat(1,tmpERPData,tmpData.erp);
+                                tmpFRData = cat(1,tmpFRData,tmpData.frVals);
+                                tmpDeltaPSD = cat(1,tmpDeltaPSD,tmpData.deltaPSD');
+                                tmpDeltaTF = cat(3,tmpDeltaTF,tmpData.deltaTF);
+                            end
                         end
 
                         erpData = mean(tmpERPData,1);
@@ -375,7 +436,8 @@ colorNames = jet(numConditions);
                         deltaTF = squeeze(mean(tmpDeltaTF,3));
                         
                     else
-                        tmpData = getDataGRF(allData{tmpElectrodes==goodElectrodes},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
+                        % TODO: Update for single elctrode in group in mltiple protocol case
+                        tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
                         erpData = tmpData.erp;
                         frData = tmpData.frVals;
                         deltaPSD = tmpData.deltaPSD';
@@ -408,9 +470,9 @@ colorNames = jet(numConditions);
             title(hDeltaTF(1,iCond),num2str(condVals(iCond)),'color',colorNames(iCond,:));
         end
 
-        for iGroup = 1:numElectrodeGroups
-            ylabel(hERP(iGroup),groupNameList{iGroup},'color',colorNamesElectrodeGroups(iGroup,:));
-            text(0.8,0.8,['N=' num2str(length(electrodeGroupList{iGroup}))],'units','Normalized','Parent',hERP(iGroup));
+        for iGroup = 1:maxNumElectrodeGroups
+            ylabel(hERP(iGroup),groupNameList{idx}{iGroup},'color',colorNamesElectrodeGroups(iGroup,:));
+            text(0.8,0.8,['N=' num2str(numElectrodesInGroup(iGroup))],'units','Normalized','Parent',hERP(iGroup));
         end
     end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
