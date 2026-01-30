@@ -436,7 +436,7 @@ colorNames = jet(numConditions);
                         deltaTF = squeeze(mean(tmpDeltaTF,3));
                         
                     else
-                        % TODO: Update for single elctrode in group in mltiple protocol case
+                        % TODO: Update for single elctrode in group in multiple protocol case
                         tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
                         erpData = tmpData.erp;
                         frData = tmpData.frVals;
@@ -447,7 +447,7 @@ colorNames = jet(numConditions);
                     % Plot data
                     plot(hERP(iGroup),tmpData.timeVals,erpData,'color',colorNames(iCond,:)); hold(hERP(iGroup),'on');
                     plot(hFR(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hFR(iGroup),'on');
-
+                    
                     plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
                     plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD)),'color','k');
                     
@@ -562,9 +562,11 @@ function [electrodeGroupList,groupNameList,goodElectrodes] = getElectrodeGroups(
 
 % get highRMSelectrodes
 tmp = load([subjectName gridType 'RFData.mat']); % Get RF data
-if strcmp(subjectName,'dona')
-    highRMSElectrodes = tmp.highRMSElectrodes;
+highRMSElectrodes = tmp.highRMSElectrodes;
+if strcmp(subjectName,'dona')    
     highRMSElectrodes = highRMSElectrodes(highRMSElectrodes<=48); % Only V1
+elseif strcmp(subjectName,'jojo')
+    highRMSElectrodes = highRMSElectrodes(highRMSElectrodes>48); % Only V1
 end
 goodElectrodes = setdiff(highRMSElectrodes,badChannels);
 
@@ -587,6 +589,16 @@ for i=1:numDistanceRangeList-1
 end
 electrodeGroupList{numDistanceRangeList} = goodElectrodes(distances>=distanceRangeList(numDistanceRangeList));
 groupNameList{numDistanceRangeList} = ['d>=' num2str(distanceRangeList(numDistanceRangeList))];
+
+% Check for empty electrode list
+for i=numDistanceRangeList:-1:1
+    if isempty(electrodeGroupList{i})
+        electrodeGroupList(i) = [];
+        groupNameList(i) = [];
+        numDistanceRangeList = numDistanceRangeList - 1;
+    end
+end
+
 
 end
 function outString = getStringFromValues(valsUnique,decimationFactor)
