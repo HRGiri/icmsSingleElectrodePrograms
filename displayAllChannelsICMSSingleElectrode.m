@@ -48,13 +48,13 @@ for i=2:length(expDate)
     [~,aValsUnique_,eValsUnique_,sValsUnique_,...
         fValsUnique_,oValsUnique_,cValsUnique_,tValsUnique_] = loadParameterCombinations(folderExtract);
     
-    if (~isequal(aValsUnique, aValsUnique_) ||...
-            ~isequal(eValsUnique,eValsUnique_) ||...
+    if (~isequal(aValsUnique, aValsUnique_) ||...            
             ~isequal(sValsUnique,sValsUnique_) ||...
             ~isequal(fValsUnique,fValsUnique_) ||...
             ~isequal(oValsUnique,oValsUnique_) ||...
-            ~isequal(cValsUnique,cValsUnique_) ||...
-            ~isequal(tValsUnique,tValsUnique_))
+            ~isequal(cValsUnique,cValsUnique_) )%||...
+            % ~isequal(eValsUnique,eValsUnique_) ||...
+            % ~isequal(tValsUnique,tValsUnique_))
         error('Parameter combinations not consistent across sessions');
     end
 end
@@ -406,9 +406,12 @@ colorNames = jet(numConditions);
 
             numElectrodesInGroup = zeros(1, maxNumElectrodeGroups);
             for iGroup = 1:maxNumElectrodeGroups
-
+                clear tmpElectrodes
                 % Get data from electrodes                   
                 for session=1:size(electrodeGroupList,2)
+                    if iGroup > length(electrodeGroupList{session}) 
+                        continue; 
+                    end
                     tmpElectrodes{session} = electrodeGroupList{session}{iGroup};   %#ok<*AGROW>
                     numElectrodesInGroup(iGroup) = numElectrodesInGroup(iGroup) + length(tmpElectrodes{session});
                 end
@@ -453,10 +456,11 @@ colorNames = jet(numConditions);
                     
                     pcolor(hDeltaTF(iGroup,iCond),tmpData.timeTF,tmpData.freqTF,deltaTF'); shading(hDeltaTF(iGroup,iCond),'interp');
                     clim(hDeltaTF(iGroup,iCond),zRange); axis(hDeltaTF(iGroup,iCond),[signalRange freqRange]);
+                   
                 end
             end
         end
-
+        
         % Rescale plots to same scale
         rescalePlots(hERP,[signalRange getYLims(hERP)]);
         rescalePlots(hFR,[signalRange getYLims(hFR)]);
@@ -563,6 +567,7 @@ function [electrodeGroupList,groupNameList,goodElectrodes] = getElectrodeGroups(
 % get highRMSelectrodes
 tmp = load([subjectName gridType 'RFData.mat']); % Get RF data
 highRMSElectrodes = tmp.highRMSElectrodes;
+highRMSElectrodes = [highRMSElectrodes [84 89]];    % Temporarily making 89 a high RMS electrode
 if strcmp(subjectName,'dona')    
     highRMSElectrodes = highRMSElectrodes(highRMSElectrodes<=48); % Only V1
 elseif strcmp(subjectName,'jojo')
