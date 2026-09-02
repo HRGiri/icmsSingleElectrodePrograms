@@ -20,8 +20,9 @@ if ~exist('badTrialNameStr','var');     badTrialNameStr = '_v5';        end
 if ~exist('useCommonBadTrialsFlag','var'); useCommonBadTrialsFlag = 1;  end
 
 gridType = 'Microelectrode';
-
+isSingleSession = false;
 if (ischar(expDate))
+    isSingleSession = true;
     expDate = {expDate};
     protocolName = {protocolName};
     stimulationElectrode = {stimulationElectrode};
@@ -51,8 +52,8 @@ for i=2:length(expDate)
     if (~isequal(aValsUnique, aValsUnique_) ||...            
             ~isequal(sValsUnique,sValsUnique_) ||...
             ~isequal(fValsUnique,fValsUnique_) ||...
-            ~isequal(oValsUnique,oValsUnique_) ||...
-            ~isequal(cValsUnique,cValsUnique_) )%||...
+            ~isequal(oValsUnique,oValsUnique_) )%||...
+            % ~isequal(cValsUnique,cValsUnique_) )%||...
             % ~isequal(eValsUnique,eValsUnique_) ||...
             % ~isequal(tValsUnique,tValsUnique_))
         error('Parameter combinations not consistent across sessions');
@@ -77,10 +78,10 @@ fontSizeSmall = 10; fontSizeMedium = 12; fontSizeLarge = 16;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Make Panels
 panelHeight = 0.25; panelStartHeight = 0.7;
-staticPanelWidth = 0.2; staticStartPos = 0.1;
-dynamicPanelWidth = 0.2; dynamicStartPos = 0.3;
-timingPanelWidth = 0.2; timingStartPos = 0.5;
-plotOptionsPanelWidth = 0.2; plotOptionsStartPos = 0.7;
+staticPanelWidth = 0.2; staticStartPos = 0.75;
+dynamicPanelWidth = 0.2; dynamicStartPos = 0.05;
+timingPanelWidth = 0.2; timingStartPos = 0.25;
+plotOptionsPanelWidth = 0.2; plotOptionsStartPos = 0.45;
 backgroundColor = 'w';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -193,7 +194,8 @@ hTimingPanel = uipanel('Title','Timing','fontSize', fontSizeLarge, ...
 signalRange = [-0.5 1.5];
 freqRange = [0 100];
 baseline = [-0.7 -0.2];
-stimPeriod = [0.75 1.25];
+stimPeriod = [0.7 1.2];
+delPSDFreqRange = [16 32];
 
 % Signal Range
 uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
@@ -234,6 +236,19 @@ hFFTMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Position',[timingTextWidth+timingBoxWidth 1-4*timingHeight timingBoxWidth timingHeight], ...
     'Style','edit','String',num2str(freqRange(2)),'FontSize',fontSizeSmall);
 
+% Delta PSD Freq Range
+uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
+    'Position',[0 1-5*timingHeight timingTextWidth timingHeight], ...
+    'Style','text','String','Delta PSD Freq Range (Hz)','FontSize',fontSizeSmall);
+hDelPSDMin = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
+    'BackgroundColor', backgroundColor, ...
+    'Position',[timingTextWidth 1-5*timingHeight timingBoxWidth timingHeight], ...
+    'Style','edit','String',num2str(delPSDFreqRange(1)),'FontSize',fontSizeSmall);
+hDelPSDMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
+    'BackgroundColor', backgroundColor, ...
+    'Position',[timingTextWidth+timingBoxWidth 1-5*timingHeight timingBoxWidth timingHeight], ...
+    'Style','edit','String',num2str(delPSDFreqRange(2)),'FontSize',fontSizeSmall);
+
 % Baseline
 uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Position',[0 1-6*timingHeight timingTextWidth timingHeight], ...
@@ -260,6 +275,18 @@ hStimPeriodMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Position',[timingTextWidth+timingBoxWidth 1-7*timingHeight timingBoxWidth timingHeight], ...
     'Style','edit','String',num2str(stimPeriod(2)),'FontSize',fontSizeSmall);
 
+% Subtract No Stim Condition
+hNoStimSubtract = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
+    'BackgroundColor', backgroundColor, ...
+    'Position',[0 1-8*timingHeight timingTextWidth timingHeight], ...
+    'Style','togglebutton','String','Subtract No Stim','Value',0,'FontSize',fontSizeSmall);
+
+% Subtract No Stim Condition
+hShowSpiking = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
+    'BackgroundColor', backgroundColor, ...
+    'Position',[0.5 1-8*timingHeight timingTextWidth timingHeight], ...
+    'Style','togglebutton','String','Show Spiking','Value',0,'FontSize',fontSizeSmall);
+
 % Z Range
 uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Position',[0 1-9*timingHeight timingTextWidth timingHeight], ...
@@ -279,6 +306,16 @@ hZMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
 plotOptionsHeight = 0.15;
 hPlotOptionsPanel = uipanel('Title','Plotting Options','fontSize', fontSizeLarge, ...
     'Unit','Normalized','Position',[plotOptionsStartPos panelStartHeight plotOptionsPanelWidth panelHeight]);
+
+% Single Plot Options
+singlePlotString = {"Electrodes", "vs Microstim Parameter", "vs Distance"};
+uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
+    'Position',[0 5*plotOptionsHeight 0.5 plotOptionsHeight], ...
+    'Style','text','String','Single Plot','FontSize',fontSizeSmall);
+hSinglePlot = uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
+    'BackgroundColor', backgroundColor, 'Position', ...
+    [0.5 5*plotOptionsHeight 0.5 plotOptionsHeight], ...
+    'Style','popup','String',singlePlotString,'FontSize',fontSizeSmall);
 
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
     'Position',[0 3*plotOptionsHeight 1 plotOptionsHeight], ...
@@ -321,7 +358,7 @@ end
 electrodeGridPos = [staticStartPos panelStartHeight staticPanelWidth panelHeight];
 [~,~,electrodeArray] = electrodePositionOnGrid(1,gridType,subjectName);
 for i=1:length(stimulationElectrode)
-    [electrodeGroupList{i},groupNameList{i},goodElectrodes{i}] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode{i},badChannels);
+    [electrodeGroupList{i},groupNameList{i},goodElectrodes{i}] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode{i},badChannels,expDate{i});
     
     numElectrodeGroups(i) = length(electrodeGroupList{i});
 end
@@ -366,14 +403,20 @@ uicontrol('Unit','Normalized','Position',[0 0.975 1 0.025],'Style','text',...
 
 %%%%%%%%%%%%%%%%%%%%%% Get data from  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 numStimulationElectrodes = length(stimulationElectrode);
-numGoodElectrodes = length(goodElectrodes{1});
+numGoodElectrodes = max(cellfun(@length, goodElectrodes));
+totalGoodElectrodes = length([goodElectrodes{:}]);
 allData = cell(numStimulationElectrodes,numGoodElectrodes);
 for j=1:numStimulationElectrodes
+    numGoodElectrodes = length(goodElectrodes{j});
     for i=1:numGoodElectrodes
         channelString = ['elec' num2str(goodElectrodes{j}(i))];
-        disp(['Getting data: ' num2str((j-1)*numGoodElectrodes + i) ' of ' num2str(numStimulationElectrodes * numGoodElectrodes) ', ' channelString ' of ' protocolName{j} ', ' expDate{j}]);
+        disp(['Getting data: ' num2str((j-1)*numGoodElectrodes + i) ' of ' num2str(totalGoodElectrodes) ', ' channelString ' of ' protocolName{j} ', ' expDate{j}]);
     
-        allData{j,i} = getSpikeLFPDataSingleChannel(subjectName,expDate{j},protocolName{j},folderSourceString,channelString,0,gridType,[],referenceChannelString,badTrialNameStr,useCommonBadTrialsFlag);
+        data = getSpikeLFPDataSingleChannel(subjectName,expDate{j},protocolName{j},folderSourceString,channelString,0,gridType,[],referenceChannelString,badTrialNameStr,useCommonBadTrialsFlag);
+        % [analogData, filterStr] = applyFilter(data.analogData,2000,'butter','high',1,3);
+        % disp(['Applying ' filterStr ' on LFP'])
+        % data.analogData = analogData;
+        allData{j,i} = data;
     end        
 end
 colormap jet;
@@ -385,17 +428,26 @@ colorNames = jet(numConditions);
         s=get(hSigma,'val');
         f=get(hSpatialFreq,'val');
         o=get(hOrientation,'val');
-        c=get(hContrast,'val');
+        con=get(hContrast,'val');
 
         signalRange = [str2double(get(hStimMin,'String')) str2double(get(hStimMax,'String'))];
         freqRange = [str2double(get(hFFTMin,'String')) str2double(get(hFFTMax,'String'))];
+        delPSDFreqRange = [str2double(get(hDelPSDMin,'String')) str2double(get(hDelPSDMax,'String'))];
 
         blRange = [str2double(get(hBaselineMin,'String')) str2double(get(hBaselineMax,'String'))];
         stRange = [str2double(get(hStimPeriodMin,'String')) str2double(get(hStimPeriodMax,'String'))];
         zRange = [str2double(get(hZMin,'String')) str2double(get(hZMax,'String'))];
 
-        removeERPFlag = 1;
+        isNoStimSubtract = get(hNoStimSubtract,'val');
+        isShowSpiking = get(hShowSpiking, 'val');
+        singlePlotType = get(hSinglePlot,'val');
 
+        removeERPFlag = 1;
+        
+        deltaPSDSlowGamma = cell(max(numElectrodeGroups) ,numConditions);
+        deltaTFNoStim = cell(max(numElectrodeGroups),1);
+        deltaPSDNoStim = cell(max(numElectrodeGroups),1);
+        tmpDeltaPSDNoStim = cell(max(numElectrodeGroups),1);
         for iCond = 1:numConditions
 
             if protocolType == 1
@@ -403,7 +455,8 @@ colorNames = jet(numConditions);
             elseif protocolType == 2
                 a = 1; e = iCond; t = 1;
             end
-
+            
+            
             numElectrodesInGroup = zeros(1, maxNumElectrodeGroups);
             for iGroup = 1:maxNumElectrodeGroups
                 clear tmpElectrodes
@@ -421,8 +474,29 @@ colorNames = jet(numConditions);
                     if numElectrodesInGroup(iGroup) > 1 % Combine across electrodes
 
                         tmpERPData = []; tmpFRData = []; tmpDeltaPSD = []; tmpDeltaTF = [];
-
-                        for session = 1:length(tmpElectrodes)                           
+                        
+                        for session = 1:length(tmpElectrodes)  
+                            % Accounting for difference in protocols
+                            % performed before and after 060726
+                            sessionDate = datetime(char(expDate{session}), 'InputFormat', 'ddMMyy');
+                            referenceDate = datetime('060726', 'InputFormat', 'ddMMyy');
+                            isAfterProtocolChange = sessionDate > referenceDate;
+                            if isAfterProtocolChange
+                                if con == 1   % 0% contrast not recorded after 060726                                    
+                                    if isSingleSession
+                                        c = con;
+                                    else
+                                        % TODO: Handle 0% contrast case. Till
+                                        % then avoid 0% contrast
+                                        error("0% contrast case is not handled. Please do not select 0% contrast.")
+                                    end
+                                else
+                                    c = con-1;
+                                end
+                            else
+                                c = con;
+                            end
+                            
                             for k = 1:length(tmpElectrodes{session})
                                 tmpData = getDataGRF(allData{session,tmpElectrodes{session}(k)==goodElectrodes{session}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
 
@@ -432,48 +506,201 @@ colorNames = jet(numConditions);
                                 tmpDeltaTF = cat(3,tmpDeltaTF,tmpData.deltaTF);
                             end
                         end
-
+                        
                         erpData = mean(tmpERPData,1);
                         frData = mean(tmpFRData,1);
                         deltaPSD = mean(tmpDeltaPSD,1);
-                        deltaTF = squeeze(mean(tmpDeltaTF,3));
-                        
+                        deltaTF = squeeze(mean(tmpDeltaTF,3));                        
                     else
                         % TODO: Update for single elctrode in group in multiple protocol case
-                        tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
+                        tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,con,t,blRange,stRange,removeERPFlag);
                         erpData = tmpData.erp;
                         frData = tmpData.frVals;
                         deltaPSD = tmpData.deltaPSD';
+                        tmpDeltaPSD = deltaPSD;
                         deltaTF = tmpData.deltaTF;
+                    end                                           
+
+                    if iCond == 1
+                        deltaTFNoStim{iGroup} = deltaTF;
+                        deltaPSDNoStim{iGroup} = deltaPSD;
+                        tmpDeltaPSDNoStim{iGroup} = tmpDeltaPSD;
+                    end
+                    
+                    if isNoStimSubtract
+                        deltaTF = deltaTF - deltaTFNoStim{iGroup};
+                        deltaPSD = deltaPSD - deltaPSDNoStim{iGroup};
+                        tmpDeltaPSD = tmpDeltaPSD - tmpDeltaPSDNoStim{iGroup};
                     end
 
+                    deltaPSDSlowGamma{iGroup, iCond} = mean(squeeze(tmpDeltaPSD(:,tmpData.freqST>=delPSDFreqRange(1) & tmpData.freqST<=delPSDFreqRange(2))),2);
+
                     % Plot data
-                    plot(hERP(iGroup),tmpData.timeVals,erpData,'color',colorNames(iCond,:)); hold(hERP(iGroup),'on');
-                    plot(hFR(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hFR(iGroup),'on');
-                    
-                    plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
-                    plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD)),'color','k');
-                    
+                    if isSingleSession
+                        % plot(hERP(iGroup),tmpData.timeVals,erpData,'color',colorNames(iCond,:)); hold(hERP(iGroup),'on');
+                        plot(hERP(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hERP(iGroup),'on');
+                    end
+
+                    if isShowSpiking
+                        plot(hDeltaPSD(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
+                    else
+                        plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
+                        plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD)),'color','k');
+                    end                    
                     pcolor(hDeltaTF(iGroup,iCond),tmpData.timeTF,tmpData.freqTF,deltaTF'); shading(hDeltaTF(iGroup,iCond),'interp');
                     clim(hDeltaTF(iGroup,iCond),zRange); axis(hDeltaTF(iGroup,iCond),[signalRange freqRange]);
-                   
+                    
                 end
             end
         end
         
-        % Rescale plots to same scale
-        rescalePlots(hERP,[signalRange getYLims(hERP)]);
-        rescalePlots(hFR,[signalRange getYLims(hFR)]);
-        rescalePlots(hDeltaPSD,[freqRange getYLims(hDeltaPSD)]);
+        % Plot mean deltaPSD across electrodes in each group
+        % if true
+            if singlePlotType ~= 1
+                cla(hElectrodes);
+                hold(hElectrodes,'on'); 
+                hElectrodes.YTickMode = 'auto';
+                hElectrodes.YTickLabelMode = 'auto';
+            end
+            for iGroup=1:max(numElectrodeGroups)
+                deltaPSDGroup = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);
+                for iCond=1:numConditions                
+                    deltaPSDGroup(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
+                end            
+                meanDelPSD = mean(deltaPSDGroup,1);
+                errorDelPSD = std(deltaPSDGroup,[],1)/sqrt(size(deltaPSDGroup,1));
+                if singlePlotType == 2
+                    errorbar(hElectrodes, 0:numConditions-1, meanDelPSD,errorDelPSD,...
+                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);
+                end
+                errorbar(hFR(iGroup), 0:numConditions-1, meanDelPSD,errorDelPSD,...
+                    '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2,...
+                    'MarkerSize',5);   
+                if ~isSingleSession
+                    ax = ancestor(hERP(iGroup), 'axes');            
+                    v = violinplot(ax, deltaPSDGroup);
+                    hold(ax, 'on');
+                end
+                % fprintf("Running Stats for %s", groupNameList{i});                
+                pValues = zeros(numConditions, numConditions);
+                for xi = 1:numConditions
+                    for yi = 1:numConditions
+                        if xi ~= yi
+                            % [h, p] = ttest(deltaPSDGroup(:,xi), deltaPSDGroup(:,yi));
+                            [p, h] = signrank(deltaPSDGroup(:,xi), deltaPSDGroup(:,yi));
+                            pValues(xi,yi) = p;
+                            % if h == 1
+                            %     fprintf("%d %s significantly different from %d %s, p-value = %f\n",xVals(x),units,xVals(y),units,p);
+                            % end
+                        end
+                    end
+                end
+                
+                maxValue = max(max(deltaPSDGroup));
+                for xt = 1:numConditions
+                    if ~isSingleSession
+                        v(xt).FaceColor = colorNames(xt,:);
+                        scatter(hERP(iGroup),ones(size(deltaPSDGroup,1))*xt, deltaPSDGroup(:,xt), 10, colorNames(xt,:), "filled")
+                    end
+                    % Plot Significance
+                    if xt < numConditions
+                        if pValues(xt,xt+1) < 0.05
+                            % Draw a line between the two groups  
+                            ax = ancestor(hFR(iGroup), 'axes');
+                            line(ax,[xt-0.95, xt-0.05], [maxValue, maxValue] + 0.5, 'Color', 'k', 'LineWidth', 1);
+                            % Add asterisk for significance
+                            if pValues(xt,xt+1) < 0.001
+                                significanceLevel = '***';
+                            elseif pValues(xt,xt+1) < 0.01
+                                significanceLevel = '**';
+                            else
+                                significanceLevel = '*';
+                            end
+            
+                            text(ax,mean([xt-1, xt]), maxValue + 0.5, significanceLevel, 'HorizontalAlignment', 'center', 'FontSize', 14);                             
+                        end
+                    end
+                end                                
+            end
+            
+            % Plot vs distance from stimulation electrode
+            if singlePlotType == 3
+                % numElecsToChoose = size(deltaPSDSlowGamma{1,1},1);
+                for iCond=1:numConditions                    
+                    % deltaPSDCond = zeros(max(numElectrodeGroups), numElecsToChoose);
+                    meanDelPSD = zeros(max(numElectrodeGroups),1);
+                    errorDelPSD = zeros(max(numElectrodeGroups),1);
+                    for iGroup=1:max(numElectrodeGroups)                                                                
+                        % tempData = deltaPSDSlowGamma{iGroup,iCond};
+                        % randIndices = randsample(length(tempData), numElecsToChoose);
+                        % deltaPSDCond(iGroup,:) = tempData(randIndices);
+                        meanDelPSD(iGroup) = mean(deltaPSDSlowGamma{iGroup, iCond});
+                        errorDelPSD(iGroup) = std(deltaPSDSlowGamma{iGroup, iCond})/sqrt(size(deltaPSDSlowGamma{iGroup, iCond},1));
+                    end            
+                    % meanDelPSD = mean(deltaPSDCond,2);
+                    % errorDelPSD = std(deltaPSDCond,[],2)/sqrt(size(deltaPSDCond,2));                    
+                    errorbar(hElectrodes, 0:max(numElectrodeGroups)-1, meanDelPSD,errorDelPSD,...
+                        '-o','Color',colorNames(iCond,:),'LineWidth',1.2);
+                end
 
-        % Titles
-        title(hERP(1),'ERPs');
-        title(hFR(1),'Firing Rates');
-        title(hDeltaPSD(1),'\DeltaPSD (dB)');
+                rescalePlots(hElectrodes, [0 max(numElectrodeGroups) getYLims(hElectrodes)]);                       
+                xticks(hElectrodes, [0 0.5:1:max(numElectrodeGroups)-1.5])
+                xticklabels(hElectrodes, 0:0.4:max(numElectrodeGroups)*0.4)  
+                title(hElectrodes, singlePlotString{3});
+            end
+
+            % Plot Decoration
+            if protocolType == 1
+                tuningTitle = 'vs Amplitude';
+            else
+                if eValsUnique(end) == 7
+                    tuningTitle = 'vs # Pulses';
+                else
+                    tuningTitle = 'vs Frequency';
+                end
+            end
+            % Rescale plots to same scale
+            rescalePlots(hFR, [0 numConditions getYLims(hFR)]);
+            rescalePlots(hERP,[0 numConditions getYLims(hERP)]);
+
+            if singlePlotType == 2
+                rescalePlots(hElectrodes, [0 numConditions getYLims(hElectrodes)]);                       
+                xticks(hElectrodes, 0:numConditions-1)
+                xticklabels(hElectrodes, condVals)                
+                title(hElectrodes,tuningTitle);
+            end
+            
+            xticks(hFR(max(numElectrodeGroups)), 0:numConditions-1)
+            xticklabels(hFR(max(numElectrodeGroups)), condVals)
+            xtickangle(hFR(max(numElectrodeGroups)), 90)
+            title(hFR(1),tuningTitle);  
+            
+            if ~isSingleSession
+                xticklabels(hERP(max(numElectrodeGroups)), condVals) 
+                xtickangle(hERP(max(numElectrodeGroups)), 90)
+                title(hERP(1),[tuningTitle ' (Violin)']);                              
+            end
+        if isSingleSession
+            % Rescale plots to same scale
+            rescalePlots(hERP,[signalRange getYLims(hERP)]);
+            % rescalePlots(hFR,[signalRange getYLims(hFR)]);
+            title(hERP(1),'ERP');
+            % title(hFR(1),'Firing Rates');
+        end
+        
+        if isShowSpiking                    
+            rescalePlots(hDeltaPSD,[signalRange getYLims(hDeltaPSD)]);                        
+            title(hDeltaPSD(1),'Firing Rates');
+        else
+            rescalePlots(hDeltaPSD,[freqRange getYLims(hDeltaPSD)]);                        
+            title(hDeltaPSD(1),'\DeltaPSD (dB)');
+        end
+
         for iCond = 1:numConditions
             title(hDeltaTF(1,iCond),num2str(condVals(iCond)),'color',colorNames(iCond,:));
         end
-
+        
+        % ylabel(hElectrodes, '\Delta Gamma Power')
         for iGroup = 1:maxNumElectrodeGroups
             ylabel(hERP(iGroup),groupNameList{idx}{iGroup},'color',colorNamesElectrodeGroups(iGroup,:));
             text(0.8,0.8,['N=' num2str(numElectrodesInGroup(iGroup))],'units','Normalized','Parent',hERP(iGroup));
@@ -505,6 +732,7 @@ colorNames = jet(numConditions);
         claPlots(hFR);
         claPlots(hDeltaPSD);
         claPlots(hDeltaTF);
+        claPlots(hElectrodes);
 
         function claPlots(plotHandles)
             [numRow,numCol] = size(plotHandles);
@@ -530,7 +758,8 @@ for row=1:numRows
     for column=1:numCols
         % get positions
         axis(plotHandles(row,column),'tight');
-        tmpAxisVals = axis(plotHandles(row,column));
+        % tmpAxisVals = axis(plotHandles(row,column));
+        tmpAxisVals = [0 0 ylim(plotHandles(row,column))];        
         if tmpAxisVals(3) < yMin
             yMin = tmpAxisVals(3);
         end
@@ -547,7 +776,11 @@ function rescalePlots(plotHandles,axisLims)
 
 for i=1:numRow
     for j=1:numCol
-        axis(plotHandles(i,j),axisLims);
+        if iscategorical(xlim(plotHandles(i,j)))
+            ylim(plotHandles(i,j),axisLims(3:4))
+        else
+            axis(plotHandles(i,j),axisLims);
+        end
     end
 end
 end
@@ -562,16 +795,26 @@ end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [electrodeGroupList,groupNameList,goodElectrodes] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode,badChannels)
+function [electrodeGroupList,groupNameList,goodElectrodes] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode,badChannels,expDate_)
+% Accounting for difference in protocols
+% performed before and after 060726
+sessionDate = datetime(char(expDate_), 'InputFormat', 'ddMMyy');
+referenceDate = datetime('060726', 'InputFormat', 'ddMMyy');
+isAfterProtocolChange = sessionDate > referenceDate;
 
 % get highRMSelectrodes
 tmp = load([subjectName gridType 'RFData.mat']); % Get RF data
 highRMSElectrodes = tmp.highRMSElectrodes;
-highRMSElectrodes = [highRMSElectrodes [84 89]];    % Temporarily making 89 a high RMS electrode
 if strcmp(subjectName,'dona')    
     highRMSElectrodes = highRMSElectrodes(highRMSElectrodes<=48); % Only V1
-elseif strcmp(subjectName,'jojo')
+    if isAfterProtocolChange        
+        highRMSElectrodes = [highRMSElectrodes 12 32 33];     % Making 12, 32 and 33 high RMS electrode    
+        nonResponsiveElectrodes = [9,10,18,19,20,27,29,30,39,40,43,45,48];
+        highRMSElectrodes = setdiff(highRMSElectrodes, nonResponsiveElectrodes);
+    end
+elseif strcmp(subjectName,'jojo')    
     highRMSElectrodes = highRMSElectrodes(highRMSElectrodes>48); % Only V1
+    highRMSElectrodes = [highRMSElectrodes [84 89]];    % Temporarily making 89 a high RMS electrode
 end
 goodElectrodes = setdiff(highRMSElectrodes,badChannels);
 
@@ -585,6 +828,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%% Now pool by distance %%%%%%%%%%%%%%%%%%%%%%%%%%%
 distanceRangeList = 0:0.4:2.4;
+% distanceRangeList(2) = [];
 numDistanceRangeList = length(distanceRangeList);
 electrodeGroupList = cell(1,numDistanceRangeList);
 groupNameList = cell(1,numDistanceRangeList);
