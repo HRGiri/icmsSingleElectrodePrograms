@@ -444,7 +444,8 @@ colorNames = jet(numConditions);
 
         removeERPFlag = 1;
         
-        deltaPSDSlowGamma = cell(max(numElectrodeGroups) ,numConditions);
+        deltaPSDSlowGamma = cell(max(numElectrodeGroups), numConditions);
+        firingRateAllElecs = cell(max(numElectrodeGroups), numConditions);
         deltaTFNoStim = cell(max(numElectrodeGroups),1);
         deltaPSDNoStim = cell(max(numElectrodeGroups),1);
         tmpDeltaPSDNoStim = cell(max(numElectrodeGroups),1);
@@ -516,6 +517,7 @@ colorNames = jet(numConditions);
                         tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,con,t,blRange,stRange,removeERPFlag);
                         erpData = tmpData.erp;
                         frData = tmpData.frVals;
+                        tmpFRData = frData;
                         deltaPSD = tmpData.deltaPSD';
                         tmpDeltaPSD = deltaPSD;
                         deltaTF = tmpData.deltaTF;
@@ -532,8 +534,10 @@ colorNames = jet(numConditions);
                         deltaPSD = deltaPSD - deltaPSDNoStim{iGroup};
                         tmpDeltaPSD = tmpDeltaPSD - tmpDeltaPSDNoStim{iGroup};
                     end
-
+                                        
                     deltaPSDSlowGamma{iGroup, iCond} = mean(squeeze(tmpDeltaPSD(:,tmpData.freqST>=delPSDFreqRange(1) & tmpData.freqST<=delPSDFreqRange(2))),2);
+                    firingRateAllElecs{iGroup, iCond} = mean(tmpFRData(:, tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)), 2)...
+                        - mean(tmpFRData(:, tmpData.frTimeVals >= blRange(1) & tmpData.frTimeVals <= blRange(2)), 2);
 
                     % Plot data
                     if isSingleSession
@@ -563,22 +567,28 @@ colorNames = jet(numConditions);
                 hElectrodes.YTickLabelMode = 'auto';
             end
             for iGroup=1:max(numElectrodeGroups)
-                deltaPSDGroup = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);
+                groupData = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);                
                 for iCond=1:numConditions                
-                    deltaPSDGroup(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
+                    if isShowSpiking
+                        groupData(:,iCond) = firingRateAllElecs{iGroup, iCond};
+                    else
+                        groupData(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
+                    end
+                    
                 end            
-                meanDelPSD = mean(deltaPSDGroup,1);
-                errorDelPSD = std(deltaPSDGroup,[],1)/sqrt(size(deltaPSDGroup,1));
-                if singlePlotType == 2
-                    errorbar(hElectrodes, 0:numConditions-1, meanDelPSD,errorDelPSD,...
-                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);
+                meanData = mean(groupData,1);
+                errorData = std(groupData,[],1)/sqrt(size(groupData,1));
+
+                if singlePlotType == 2                    
+                    errorbar(hElectrodes, 0:numConditions-1, meanData,errorData,...
+                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);                    
                 end
-                errorbar(hFR(iGroup), 0:numConditions-1, meanDelPSD,errorDelPSD,...
+                errorbar(hFR(iGroup), 0:numConditions-1, meanData,errorData,...
                     '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2,...
                     'MarkerSize',5);   
                 if ~isSingleSession
                     ax = ancestor(hERP(iGroup), 'axes');            
-                    v = violinplot(ax, deltaPSDGroup);
+                    v = violinplot(ax, groupData);
                     hold(ax, 'on');
                 end
                 % fprintf("Running Stats for %s", groupNameList{i});                
@@ -587,7 +597,7 @@ colorNames = jet(numConditions);
                     for yi = 1:numConditions
                         if xi ~= yi
                             % [h, p] = ttest(deltaPSDGroup(:,xi), deltaPSDGroup(:,yi));
-                            [p, h] = signrank(deltaPSDGroup(:,xi), deltaPSDGroup(:,yi));
+                            [p, h] = signrank(groupData(:,xi), groupData(:,yi));
                             pValues(xi,yi) = p;
                             % if h == 1
                             %     fprintf("%d %s significantly different from %d %s, p-value = %f\n",xVals(x),units,xVals(y),units,p);
@@ -596,11 +606,11 @@ colorNames = jet(numConditions);
                     end
                 end
                 
-                maxValue = max(max(deltaPSDGroup));
+                maxValue = max(max(groupData));
                 for xt = 1:numConditions
                     if ~isSingleSession
                         v(xt).FaceColor = colorNames(xt,:);
-                        scatter(hERP(iGroup),ones(size(deltaPSDGroup,1))*xt, deltaPSDGroup(:,xt), 10, colorNames(xt,:), "filled")
+                        scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
                     end
                     % Plot Significance
                     if xt < numConditions
@@ -628,18 +638,23 @@ colorNames = jet(numConditions);
                 % numElecsToChoose = size(deltaPSDSlowGamma{1,1},1);
                 for iCond=1:numConditions                    
                     % deltaPSDCond = zeros(max(numElectrodeGroups), numElecsToChoose);
-                    meanDelPSD = zeros(max(numElectrodeGroups),1);
-                    errorDelPSD = zeros(max(numElectrodeGroups),1);
+                    meanData = zeros(max(numElectrodeGroups),1);
+                    errorData = zeros(max(numElectrodeGroups),1);
                     for iGroup=1:max(numElectrodeGroups)                                                                
                         % tempData = deltaPSDSlowGamma{iGroup,iCond};
                         % randIndices = randsample(length(tempData), numElecsToChoose);
                         % deltaPSDCond(iGroup,:) = tempData(randIndices);
-                        meanDelPSD(iGroup) = mean(deltaPSDSlowGamma{iGroup, iCond});
-                        errorDelPSD(iGroup) = std(deltaPSDSlowGamma{iGroup, iCond})/sqrt(size(deltaPSDSlowGamma{iGroup, iCond},1));
+                        if isShowSpiking
+                            meanData(iGroup) = mean(firingRateAllElecs{iGroup, iCond});
+                            errorData(iGroup) = std(firingRateAllElecs{iGroup, iCond})/sqrt(size(firingRateAllElecs{iGroup, iCond},1));
+                        else
+                            meanData(iGroup) = mean(deltaPSDSlowGamma{iGroup, iCond});
+                            errorData(iGroup) = std(deltaPSDSlowGamma{iGroup, iCond})/sqrt(size(deltaPSDSlowGamma{iGroup, iCond},1));
+                        end
                     end            
                     % meanDelPSD = mean(deltaPSDCond,2);
                     % errorDelPSD = std(deltaPSDCond,[],2)/sqrt(size(deltaPSDCond,2));                    
-                    errorbar(hElectrodes, 0:max(numElectrodeGroups)-1, meanDelPSD,errorDelPSD,...
+                    errorbar(hElectrodes, 0:max(numElectrodeGroups)-1, meanData,errorData,...
                         '-o','Color',colorNames(iCond,:),'LineWidth',1.2);
                 end
 
