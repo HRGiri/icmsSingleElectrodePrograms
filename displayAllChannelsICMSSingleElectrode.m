@@ -508,6 +508,13 @@ colorNames = jet(numConditions);
                             end
                         end
                         
+                        % Check for responsive firing units
+                        frSt = mean(tmpFRData(:,tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)),2);
+                        frBl = mean(tmpFRData(:,tmpData.frTimeVals >= blRange(1) & tmpData.frTimeVals <= blRange(2)),2);
+                        firingUnitIndices = find(frSt >= 1);
+                        firingUnitIndices = intersect(firingUnitIndices, find(abs(frSt-frBl) >= 1));
+                        % tmpFRData = tmpFRData(firingUnitIndices, :);
+
                         erpData = mean(tmpERPData,1);
                         frData = mean(tmpFRData,1);
                         deltaPSD = mean(tmpDeltaPSD,1);
@@ -536,8 +543,9 @@ colorNames = jet(numConditions);
                     end
                                         
                     deltaPSDSlowGamma{iGroup, iCond} = mean(squeeze(tmpDeltaPSD(:,tmpData.freqST>=delPSDFreqRange(1) & tmpData.freqST<=delPSDFreqRange(2))),2);
-                    firingRateAllElecs{iGroup, iCond} = mean(tmpFRData(:, tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)), 2)...
-                        - mean(tmpFRData(:, tmpData.frTimeVals >= blRange(1) & tmpData.frTimeVals <= blRange(2)), 2);
+                    % firingRateAllElecs{iGroup, iCond} = mean(tmpFRData(:, tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)), 2)...
+                    %     - mean(tmpFRData(:, tmpData.frTimeVals >= blRange(1) & tmpData.frTimeVals <= blRange(2)), 2);
+                    firingRateAllElecs{iGroup, iCond} = mean(tmpFRData(:, tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)), 2);
 
                     % Plot data
                     if isSingleSession
@@ -547,12 +555,15 @@ colorNames = jet(numConditions);
 
                     if isShowSpiking
                         plot(hDeltaPSD(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
+                        % text(0.8,0.8,['N=' num2str(size(tmpFRData,1))],'units','Normalized','Parent',hDeltaPSD(iGroup));
                     else
                         plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
                         plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD)),'color','k');
                     end                    
                     pcolor(hDeltaTF(iGroup,iCond),tmpData.timeTF,tmpData.freqTF,deltaTF'); shading(hDeltaTF(iGroup,iCond),'interp');
                     clim(hDeltaTF(iGroup,iCond),zRange); axis(hDeltaTF(iGroup,iCond),[signalRange freqRange]);
+                    % Plot a rectangle to indicate the signal and frequency ranges
+                    rectangle(ancestor(hDeltaTF(iGroup,iCond), 'axes'), 'Position',[stRange(1) delPSDFreqRange(1) stRange(2)-stRange(1) delPSDFreqRange(2)-delPSDFreqRange(1)],'EdgeColor','k','LineStyle','--');
                     
                 end
             end
@@ -566,6 +577,8 @@ colorNames = jet(numConditions);
                 hElectrodes.YTickMode = 'auto';
                 hElectrodes.YTickLabelMode = 'auto';
             end
+            
+            numFiringUnitsInGroup = zeros(1,max(numElectrodeGroups));
             for iGroup=1:max(numElectrodeGroups)
                 groupData = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);                
                 for iCond=1:numConditions                
@@ -575,7 +588,13 @@ colorNames = jet(numConditions);
                         groupData(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
                     end
                     
-                end            
+                end       
+                if isShowSpiking
+                    % Select firing units
+                    frAbsChange = mean(abs(groupData),2);                    
+                    groupData = groupData(frAbsChange >= 1, :);
+                    numFiringUnitsInGroup(iGroup) = size(groupData,1);
+                end
                 meanData = mean(groupData,1);
                 errorData = std(groupData,[],1)/sqrt(size(groupData,1));
 
@@ -591,7 +610,10 @@ colorNames = jet(numConditions);
                     v = violinplot(ax, groupData);
                     hold(ax, 'on');
                 end
-                % fprintf("Running Stats for %s", groupNameList{i});                
+
+                % Run stats
+                % fprintf("Running Stats for %s", groupNameList{i});  
+                if ~isempty(groupData)
                 pValues = zeros(numConditions, numConditions);
                 for xi = 1:numConditions
                     for yi = 1:numConditions
@@ -630,7 +652,8 @@ colorNames = jet(numConditions);
                             text(ax,mean([xt-1, xt]), maxValue + 0.5, significanceLevel, 'HorizontalAlignment', 'center', 'FontSize', 14);                             
                         end
                     end
-                end                                
+                end      
+                end
             end
             
             % Plot vs distance from stimulation electrode
@@ -704,11 +727,18 @@ colorNames = jet(numConditions);
         end
         
         if isShowSpiking                    
-            rescalePlots(hDeltaPSD,[signalRange getYLims(hDeltaPSD)]);                        
+            rescalePlots(hDeltaPSD,[signalRange getYLims(hDeltaPSD)]); 
+            rescalePlots(hDeltaPSD, [stRange 0 40])
             title(hDeltaPSD(1),'Firing Rates');
         else
-            rescalePlots(hDeltaPSD,[freqRange getYLims(hDeltaPSD)]);                        
+            rescalePlots(hDeltaPSD,[freqRange getYLims(hDeltaPSD)]);              
             title(hDeltaPSD(1),'\DeltaPSD (dB)');
+            % Plot vertical lines at frequency range
+            for iGroup = 1:maxNumElectrodeGroups
+                hold(hDeltaPSD(iGroup),'on');
+                plot(hDeltaPSD(iGroup),[delPSDFreqRange(1) delPSDFreqRange(1)],getYLims(hDeltaPSD(iGroup)),'--k');
+                plot(hDeltaPSD(iGroup),[delPSDFreqRange(2) delPSDFreqRange(2)],getYLims(hDeltaPSD(iGroup)),'--k');
+            end
         end
 
         for iCond = 1:numConditions
@@ -718,7 +748,11 @@ colorNames = jet(numConditions);
         % ylabel(hElectrodes, '\Delta Gamma Power')
         for iGroup = 1:maxNumElectrodeGroups
             ylabel(hERP(iGroup),groupNameList{idx}{iGroup},'color',colorNamesElectrodeGroups(iGroup,:));
-            text(0.8,0.8,['N=' num2str(numElectrodesInGroup(iGroup))],'units','Normalized','Parent',hERP(iGroup));
+            if isShowSpiking
+                text(0.8,0.8,['N=' num2str(numFiringUnitsInGroup(iGroup))],'units','Normalized','Parent',hERP(iGroup));
+            else
+                text(0.8,0.8,['N=' num2str(numElectrodesInGroup(iGroup))],'units','Normalized','Parent',hERP(iGroup));
+            end
         end
     end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -736,7 +770,7 @@ colorNames = jet(numConditions);
 
         % Rescale plots to same scale
         rescalePlots(hERP,[signalRange getYLims(hERP)]);
-        rescalePlots(hFR,[signalRange getYLims(hFR)]);
+        rescalePlots(hFR,[0 numConditions getYLims(hFR)]);
         rescalePlots(hDeltaPSD,[freqRange getYLims(hDeltaPSD)]);
         rescalePlots(hDeltaTF,[signalRange freqRange]);
     end
