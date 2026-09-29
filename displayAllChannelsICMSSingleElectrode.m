@@ -13,11 +13,15 @@
 % temporal frequency is mapped to duration (in the old version, the
 % frequency of stimulation)
 
-function displayAllChannelsICMSSingleElectrode(subjectName,expDate,protocolName,folderSourceString,stimulationElectrode,badTrialNameStr,useCommonBadTrialsFlag)
+function displayAllChannelsICMSSingleElectrode(subjectName,expDate,protocolName,folderSourceString,stimulationElectrode,badTrialNameStr,useCommonBadTrialsFlag, modulatorElectrode, smooth, effector, meanData)
 
 if ~exist('folderSourceString','var');   folderSourceString='E:';       end
 if ~exist('badTrialNameStr','var');     badTrialNameStr = '_v5';        end
 if ~exist('useCommonBadTrialsFlag','var'); useCommonBadTrialsFlag = 1;  end
+if ~exist('modulatorElectrode','var'); modulatorElectrode = []; end
+if ~exist('effector','var'); effector = 1; end
+if ~exist('smooth','var'); smooth = 0; end
+if ~exist('meanData','var'); meanData = 1; end
 
 gridType = 'Microelectrode';
 isSingleSession = false;
@@ -61,12 +65,15 @@ for i=2:length(expDate)
 end
 
 % Guess the type of protocol
-if ~isscalar(aValsUnique) && isscalar(eValsUnique) && isscalar(tValsUnique)
+if ~isscalar(aValsUnique) && isscalar(eValsUnique) && isscalar(tValsUnique) && isempty(modulatorElectrode)
     protocolType = 1; 
     condVals = aValsUnique;
-elseif isscalar(aValsUnique) && ~isscalar(eValsUnique) && isscalar(tValsUnique)
+elseif isscalar(aValsUnique) && ~isscalar(eValsUnique) && isscalar(tValsUnique) && isempty(modulatorElectrode)
     protocolType = 2;
     condVals = eValsUnique;
+elseif ~isempty(modulatorElectrode) % for the paired stimulation protocol
+        protocolType = 3; 
+        condVals = aValsUnique;
 else
     error('Parameter combinations not in valid format');
 end
@@ -81,7 +88,14 @@ panelHeight = 0.25; panelStartHeight = 0.7;
 staticPanelWidth = 0.2; staticStartPos = 0.75;
 dynamicPanelWidth = 0.2; dynamicStartPos = 0.05;
 timingPanelWidth = 0.2; timingStartPos = 0.25;
-plotOptionsPanelWidth = 0.2; plotOptionsStartPos = 0.45;
+
+% Plotting and charting options
+plotOptionsPanelWidth = 0.13;
+plotOptionsStartPos = 0.45;
+
+chartingOptionsPanelWidth = 0.17;
+chartingOptionsStartPos = 0.58;
+
 backgroundColor = 'w';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -193,8 +207,13 @@ hTimingPanel = uipanel('Title','Timing','fontSize', fontSizeLarge, ...
 
 signalRange = [-0.5 1.5];
 freqRange = [0 100];
+if protocolType == 3 
+    baseline = [-0.8 -0.3];
+    stimPeriod = [0.75 1.25];
+else
 baseline = [-0.7 -0.2];
 stimPeriod = [0.7 1.2];
+end
 delPSDFreqRange = [16 32];
 
 % Signal Range
@@ -275,17 +294,6 @@ hStimPeriodMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Position',[timingTextWidth+timingBoxWidth 1-7*timingHeight timingBoxWidth timingHeight], ...
     'Style','edit','String',num2str(stimPeriod(2)),'FontSize',fontSizeSmall);
 
-% Subtract No Stim Condition
-hNoStimSubtract = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
-    'BackgroundColor', backgroundColor, ...
-    'Position',[0 1-8*timingHeight timingTextWidth timingHeight], ...
-    'Style','togglebutton','String','Subtract No Stim','Value',0,'FontSize',fontSizeSmall);
-
-% Subtract No Stim Condition
-hShowSpiking = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
-    'BackgroundColor', backgroundColor, ...
-    'Position',[0.5 1-8*timingHeight timingTextWidth timingHeight], ...
-    'Style','togglebutton','String','Show Spiking','Value',0,'FontSize',fontSizeSmall);
 
 % Z Range
 uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
@@ -301,41 +309,86 @@ hZMax = uicontrol('Parent',hTimingPanel,'Unit','Normalized', ...
     'Style','edit','String','10','FontSize',fontSizeSmall);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% Plot Options %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% Plot Options %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-plotOptionsHeight = 0.15;
+
+plotOptionsHeight = 0.16;
+
 hPlotOptionsPanel = uipanel('Title','Plotting Options','fontSize', fontSizeLarge, ...
-    'Unit','Normalized','Position',[plotOptionsStartPos panelStartHeight plotOptionsPanelWidth panelHeight]);
+    'Unit','Normalized','Position',[plotOptionsStartPos panelStartHeight ...
+    plotOptionsPanelWidth panelHeight]);
 
 % Single Plot Options
 singlePlotString = {"Electrodes", "vs Microstim Parameter", "vs Distance"};
+
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
-    'Position',[0 5*plotOptionsHeight 0.5 plotOptionsHeight], ...
+    'Position',[0 0.80 0.42 plotOptionsHeight], ...
     'Style','text','String','Single Plot','FontSize',fontSizeSmall);
+
 hSinglePlot = uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
-    'BackgroundColor', backgroundColor, 'Position', ...
-    [0.5 5*plotOptionsHeight 0.5 plotOptionsHeight], ...
+    'BackgroundColor', backgroundColor, ...
+    'Position',[0.42 0.80 0.58 plotOptionsHeight], ...
     'Style','popup','String',singlePlotString,'FontSize',fontSizeSmall);
 
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
-    'Position',[0 3*plotOptionsHeight 1 plotOptionsHeight], ...
-    'Style','pushbutton','String','cla','FontSize',fontSizeMedium, ...
+    'Position',[0 0.60 1 plotOptionsHeight], ...
+    'Style','pushbutton','String','cla','FontSize',fontSizeSmall, ...
     'Callback',{@cla_Callback});
 
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
-    'Position',[0 2*plotOptionsHeight 1 plotOptionsHeight], ...
-    'Style','pushbutton','String','rescale Z','FontSize',fontSizeMedium, ...
+    'Position',[0 0.40 1 plotOptionsHeight], ...
+    'Style','pushbutton','String','rescale Z','FontSize',fontSizeSmall, ...
     'Callback',{@rescaleZ_Callback});
 
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
-    'Position',[0 plotOptionsHeight 1 plotOptionsHeight], ...
-    'Style','pushbutton','String','rescale XY','FontSize',fontSizeMedium, ...
+    'Position',[0 0.20 1 plotOptionsHeight], ...
+    'Style','pushbutton','String','rescale XY','FontSize',fontSizeSmall, ...
     'Callback',{@rescaleData_Callback});
 
 uicontrol('Parent',hPlotOptionsPanel,'Unit','Normalized', ...
     'Position',[0 0 1 plotOptionsHeight], ...
-    'Style','pushbutton','String','plot','FontSize',fontSizeMedium, ...
+    'Style','pushbutton','String','plot','FontSize',fontSizeSmall, ...
     'Callback',{@plotData_Callback});
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Charting Options %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+chartingHeight = 0.14;
+
+hChartingOptionsPanel = uipanel('Title','Charting Options','fontSize', fontSizeLarge, ...
+    'Unit','Normalized','Position',[chartingOptionsStartPos panelStartHeight ...
+    chartingOptionsPanelWidth panelHeight]);
+
+% Show all p-values
+uicontrol('Parent',hChartingOptionsPanel,'Unit','Normalized', ...
+    'Position',[0 0.84 1 chartingHeight], ...
+    'Style','pushbutton','String','Show all p-values', ...
+    'FontSize',fontSizeSmall, ...
+    'Callback',@showPValues_Callback);
+
+% Subtract No Stim
+hNoStimSubtract = uicontrol('Parent',hChartingOptionsPanel,'Unit','Normalized', ...
+    'BackgroundColor',backgroundColor, ...
+    'Position',[0 0.66 1 chartingHeight], ...
+    'Style','togglebutton','String','Subtract No Stim', ...
+    'Value',0,'FontSize',fontSizeSmall);
+
+% Show Spiking
+hShowSpiking = uicontrol('Parent',hChartingOptionsPanel,'Unit','Normalized', ...
+    'BackgroundColor',backgroundColor, ...
+    'Position',[0 0.48 1 chartingHeight], ...
+    'Style','togglebutton','String','Show Spiking', ...
+    'Value',0,'FontSize',fontSizeSmall);
+
+% Show Significance
+hShowSignificance = uicontrol('Parent',hChartingOptionsPanel,'Unit','Normalized', ...
+    'BackgroundColor',backgroundColor, ...
+    'Position',[0 0.12 1 chartingHeight], ...
+    'Style','togglebutton', ...
+    'String','Show Significance', ...
+    'Value',0, ...
+    'FontSize',fontSizeSmall);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Show electrode array and bad channels
@@ -359,6 +412,17 @@ electrodeGridPos = [staticStartPos panelStartHeight staticPanelWidth panelHeight
 [~,~,electrodeArray] = electrodePositionOnGrid(1,gridType,subjectName);
 for i=1:length(stimulationElectrode)
     [electrodeGroupList{i},groupNameList{i},goodElectrodes{i}] = getElectrodeGroups(subjectName,gridType,electrodeArray,stimulationElectrode{i},badChannels,expDate{i});
+    
+    %remove modElecs for paired stim 
+    if ~isempty(modulatorElectrode{i})
+        modElec = modulatorElectrode{i}; 
+        for group = 1:length(electrodeGroupList{i})
+            if ismember(modElec, electrodeGroupList{i}{group})
+                electrodeGroupList{i}{group} = setdiff(electrodeGroupList{i}{group}, modElec);
+            end
+        end
+        goodElectrodes{i} = setdiff(goodElectrodes{i},modElec);
+    end
     
     numElectrodeGroups(i) = length(electrodeGroupList{i});
 end
@@ -397,9 +461,20 @@ hERP = getPlotHandles(maxNumElectrodeGroups,1,[0.05 0.05 0.1 0.6]);
 hFR  = getPlotHandles(maxNumElectrodeGroups,1,[0.175 0.05 0.1 0.6]);
 hDeltaPSD = getPlotHandles(maxNumElectrodeGroups,1,[0.3 0.05 0.1 0.6]);
 hDeltaTF  = getPlotHandles(maxNumElectrodeGroups,numConditions,[0.425 0.05 0.55 0.6]);
-
+if protocolType == 3
+    if effector == 1
+        uicontrol('Unit','Normalized','Position',[0 0.975 1 0.025],'Style','text',...
+            'String',[subjectName '(effector)'],'FontSize',fontSizeSmall);
+        
+    else
+        uicontrol('Unit','Normalized','Position',[0 0.975 1 0.025],'Style','text',...
+            'String',[subjectName '(modulator)'],'FontSize',fontSizeSmall);
+    end
+    
+else
 uicontrol('Unit','Normalized','Position',[0 0.975 1 0.025],'Style','text',...
     'String',[subjectName expDate protocolName],'FontSize',fontSizeSmall);
+end
 
 %%%%%%%%%%%%%%%%%%%%%% Get data from  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 numStimulationElectrodes = length(stimulationElectrode);
@@ -421,6 +496,10 @@ for j=1:numStimulationElectrodes
 end
 colormap jet;
 colorNames = jet(numConditions);
+
+if protocolType == 3
+    allPValues = cell(max(numElectrodeGroups),1);
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % functions
     function plotData_Callback(~,~)
@@ -441,6 +520,7 @@ colorNames = jet(numConditions);
         isNoStimSubtract = get(hNoStimSubtract,'val');
         isShowSpiking = get(hShowSpiking, 'val');
         singlePlotType = get(hSinglePlot,'val');
+        isShowSignificance = get(hShowSignificance, 'val');
 
         removeERPFlag = 1;
         
@@ -451,18 +531,25 @@ colorNames = jet(numConditions);
         tmpDeltaPSDNoStim = cell(max(numElectrodeGroups),1);
         for iCond = 1:numConditions
 
-            if protocolType == 1
+            if ismember(protocolType, [1,3])
                 a = iCond; e = 1; t = 1;
             elseif protocolType == 2
                 a = 1; e = iCond; t = 1;
             end
-            
-            
+           
             numElectrodesInGroup = zeros(1, maxNumElectrodeGroups);
             for iGroup = 1:maxNumElectrodeGroups
                 clear tmpElectrodes
                 % Get data from electrodes                   
                 for session=1:size(electrodeGroupList,2)
+                    if protocolType == 3
+                        if effector == 1
+                        if a == 4 && session == 4
+                        continue;
+                        end
+                        end
+                    end
+                    
                     if iGroup > length(electrodeGroupList{session}) 
                         continue; 
                     end
@@ -480,7 +567,8 @@ colorNames = jet(numConditions);
                             % Accounting for difference in protocols
                             % performed before and after 060726
                             sessionDate = datetime(char(expDate{session}), 'InputFormat', 'ddMMyy');
-                            referenceDate = datetime('060726', 'InputFormat', 'ddMMyy');
+                           if ismember(protocolType, [1,2])
+                               referenceDate = datetime('060726', 'InputFormat', 'ddMMyy');
                             isAfterProtocolChange = sessionDate > referenceDate;
                             if isAfterProtocolChange
                                 if con == 1   % 0% contrast not recorded after 060726                                    
@@ -497,6 +585,11 @@ colorNames = jet(numConditions);
                             else
                                 c = con;
                             end
+                           else
+                                c=con;
+                           end
+
+
                             
                             for k = 1:length(tmpElectrodes{session})
                                 tmpData = getDataGRF(allData{session,tmpElectrodes{session}(k)==goodElectrodes{session}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
@@ -514,6 +607,14 @@ colorNames = jet(numConditions);
                         deltaTF = squeeze(mean(tmpDeltaTF,3));                        
                     else
                         % TODO: Update for single elctrode in group in multiple protocol case
+                        zeroCol = 1;
+                        while zeroCol <= length(tmpElectrodes) 
+                            if isempty(tmpElectrodes{zeroCol})
+                                tmpElectrodes(:,zeroCol) = [];
+                            else 
+                                zeroCol = zeroCol + 1;
+                            end
+                        end
                         tmpData = getDataGRF(allData{tmpElectrodes{1}==goodElectrodes{1}},a,e,s,f,o,con,t,blRange,stRange,removeERPFlag);
                         erpData = tmpData.erp;
                         frData = tmpData.frVals;
@@ -534,8 +635,13 @@ colorNames = jet(numConditions);
                         deltaPSD = deltaPSD - deltaPSDNoStim{iGroup};
                         tmpDeltaPSD = tmpDeltaPSD - tmpDeltaPSDNoStim{iGroup};
                     end
-                                        
+                    if meanData == 1                    
                     deltaPSDSlowGamma{iGroup, iCond} = mean(squeeze(tmpDeltaPSD(:,tmpData.freqST>=delPSDFreqRange(1) & tmpData.freqST<=delPSDFreqRange(2))),2);
+                    else
+                        deltaPSDSlowGamma{iGroup, iCond} = max( ...
+                            squeeze(tmpDeltaPSD(:,tmpData.freqST>=delPSDFreqRange(1) & ...
+                            tmpData.freqST<=delPSDFreqRange(2))), [], 2);
+                    end
                     firingRateAllElecs{iGroup, iCond} = mean(tmpFRData(:, tmpData.frTimeVals >= stRange(1) & tmpData.frTimeVals <= stRange(2)), 2)...
                         - mean(tmpFRData(:, tmpData.frTimeVals >= blRange(1) & tmpData.frTimeVals <= blRange(2)), 2);
 
@@ -547,12 +653,32 @@ colorNames = jet(numConditions);
 
                     if isShowSpiking
                         plot(hDeltaPSD(iGroup),tmpData.frTimeVals,frData,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
-                    else
+                    elseif smooth == 1
+                            deltaPSD_smooth = sgolayfilt(deltaPSD,3,9);
+                            plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD_smooth,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
+                            plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD_smooth)),'color','k');
+                        else
                         plot(hDeltaPSD(iGroup),tmpData.freqST,deltaPSD,'color',colorNames(iCond,:)); hold(hDeltaPSD(iGroup),'on');
                         plot(hDeltaPSD(iGroup),tmpData.freqST,zeros(1,length(deltaPSD)),'color','k');
-                    end                    
+                    end  
+                    axes(hDeltaPSD(iGroup));
+                    hold on;
+                    xline(delPSDFreqRange(1), 'k:', 'LineWidth', 1.2);
+                    xline(delPSDFreqRange(2), 'k:', 'LineWidth', 1.2);
+
                     pcolor(hDeltaTF(iGroup,iCond),tmpData.timeTF,tmpData.freqTF,deltaTF'); shading(hDeltaTF(iGroup,iCond),'interp');
                     clim(hDeltaTF(iGroup,iCond),zRange); axis(hDeltaTF(iGroup,iCond),[signalRange freqRange]);
+                    axes(hDeltaTF(iGroup,iCond));
+                    hold on;
+                    
+                    % Mark Delta PSD frequency range on TF plot
+                    yline(delPSDFreqRange(1), 'k:', 'LineWidth', 1.2);
+                    yline(delPSDFreqRange(2), 'k:', 'LineWidth', 1.2);
+                    % Vertical dotted lines showing stimulation period
+                    axes(hDeltaTF(iGroup,iCond));
+                    hold on;
+                    xline(stimPeriod(1), 'k:', 'LineWidth', 1.2);
+                    xline(stimPeriod(2), 'k:', 'LineWidth', 1.2);
                     
                 end
             end
@@ -566,32 +692,71 @@ colorNames = jet(numConditions);
                 hElectrodes.YTickMode = 'auto';
                 hElectrodes.YTickLabelMode = 'auto';
             end
+           
+
             for iGroup=1:max(numElectrodeGroups)
+                
                 groupData = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);                
                 for iCond=1:numConditions                
                     if isShowSpiking
                         groupData(:,iCond) = firingRateAllElecs{iGroup, iCond};
                     else
-                        groupData(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
+                        
+                        groupData(1:length(deltaPSDSlowGamma{iGroup,iCond}),iCond) = deltaPSDSlowGamma{iGroup,iCond};
                     end
                     
                 end            
                 meanData = mean(groupData,1);
                 errorData = std(groupData,[],1)/sqrt(size(groupData,1));
 
-                if singlePlotType == 2                    
-                    errorbar(hElectrodes, 0:numConditions-1, meanData,errorData,...
-                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);                    
+                if singlePlotType == 2   
+                    if protocolType == 3
+                        errorbar(hElectrodes, 1:numConditions, meanData,errorData,...
+                            '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);
+                    else
+                        errorbar(hElectrodes, 0:numConditions-1, meanData,errorData,...
+                            '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2);
+                    end
                 end
-                errorbar(hFR(iGroup), 0:numConditions-1, meanData,errorData,...
-                    '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2,...
-                    'MarkerSize',5);   
+                if protocolType == 3
+                    errorbar(hFR(iGroup), 1:numConditions, meanData,errorData,...
+                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2,...
+                        'MarkerSize',5);
+                else
+                    errorbar(hFR(iGroup), 0:numConditions-1, meanData,errorData,...
+                        '-o','Color',colorNamesElectrodeGroups(iGroup,:),'LineWidth',1.2,...
+                        'MarkerSize',5);
+                end  
+
                 if ~isSingleSession
-                    ax = ancestor(hERP(iGroup), 'axes');            
+                    ax = ancestor(hERP(iGroup), 'axes');   
+                    if size(groupData,1) == 1
+                        
+                        scatter(hERP(iGroup),ones(size(groupData,1))*[1:12] , groupData, 10, colorNames, "filled")
+                        
+                    else
                     v = violinplot(ax, groupData);
                     hold(ax, 'on');
+                        for xt = 1 : numConditions
+                        v(xt).FaceColor = colorNames(xt,:);
+                        scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
+                        end
+                        
+                    end
+                    
+                    
                 end
+
+                % for xt = 1:numConditions
+                %     if ~isSingleSession
+                %         v(xt).FaceColor = colorNames(xt,:);
+                %         scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
+                %     end
+                % end
+
+
                 % fprintf("Running Stats for %s", groupNameList{i});                
+                if size(groupData, 1) > 1
                 pValues = zeros(numConditions, numConditions);
                 for xi = 1:numConditions
                     for yi = 1:numConditions
@@ -604,15 +769,66 @@ colorNames = jet(numConditions);
                             % end
                         end
                     end
+
+                    if protocolType == 3
+                        allPValues{iGroup} = pValues;
+                    end
+
                 end
-                
+
+               
+                if isShowSignificance
                 maxValue = max(max(groupData));
                 for xt = 1:numConditions
-                    if ~isSingleSession
-                        v(xt).FaceColor = colorNames(xt,:);
-                        scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
-                    end
+                    % if ~isSingleSession
+                    %     v(xt).FaceColor = colorNames(xt,:);
+                    %     scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
+                    % end
+
                     % Plot Significance
+                    if protocolType == 3
+                      
+                        ax = ancestor(hFR(iGroup), 'axes');
+
+                        % Show significance for ALL pairwise comparisons
+                        sigCount = 0;
+
+                        for x1 = 1:numConditions-1
+                            for x2 = x1+1:numConditions
+
+                                p = pValues(x1,x2);
+
+                                if p < 0.01
+
+                                    sigCount = sigCount + 1;
+
+                                    % Higher significance comparisons are placed higher
+                                    y = maxValue + 0.5 + (sigCount-1)*0.5;
+
+                                    line(ax,[x1 x2],[y y],...
+                                        'Color','k','LineWidth',1);
+
+                                    if p < 0.001
+                                        significanceLevel = '***';
+                                    % elseif p < 0.01
+                                    %     significanceLevel = '**';
+                                    else
+                                        significanceLevel = '**';
+                                    end
+
+                                    text(ax,mean([x1 x2]),y,...
+                                        significanceLevel,...
+                                        'HorizontalAlignment','center',...
+                                        'VerticalAlignment','bottom',...
+                                        'FontSize',14);
+                                end
+                            end
+                        end
+
+                        continue;
+
+                        else
+                        
                     if xt < numConditions
                         if pValues(xt,xt+1) < 0.05
                             % Draw a line between the two groups  
@@ -630,8 +846,12 @@ colorNames = jet(numConditions);
                             text(ax,mean([xt-1, xt]), maxValue + 0.5, significanceLevel, 'HorizontalAlignment', 'center', 'FontSize', 14);                             
                         end
                     end
-                end                                
+                end
+                end
+                end
+                end
             end
+       
             
             % Plot vs distance from stimulation electrode
             if singlePlotType == 3
@@ -669,26 +889,56 @@ colorNames = jet(numConditions);
                 tuningTitle = 'vs Amplitude';
             else
                 if eValsUnique(end) == 7
-                    tuningTitle = 'vs # Pulses';
+                   if protocolType == 3
+                       tuningTitle = 'vs Delays';
+                       else
+                        tuningTitle = 'vs # Pulses';
+                   end
                 else
                     tuningTitle = 'vs Frequency';
                 end
             end
             % Rescale plots to same scale
             rescalePlots(hFR, [0 numConditions getYLims(hFR)]);
-            rescalePlots(hERP,[0 numConditions getYLims(hERP)]);
+            rescalePlots(hERP,[1 numConditions getYLims(hERP)]);
+            
+            if protocolType == 3
+                rescalePlots(hERP,[1 numConditions getYLims(hERP)]);
+
+                xticks(hERP(max(numElectrodeGroups)), 1:numConditions);
+                xticklabels(hERP(max(numElectrodeGroups)), condVals);
+                xtickangle(hERP(max(numElectrodeGroups)), 90);
+            else
+            xticks(hERP(max(numElectrodeGroups)), 1:numConditions);
+            xticklabels(hERP(max(numElectrodeGroups)), condVals);
+            xtickangle(hERP(max(numElectrodeGroups)), 90);
+            end
 
             if singlePlotType == 2
-                rescalePlots(hElectrodes, [0 numConditions getYLims(hElectrodes)]);                       
-                xticks(hElectrodes, 0:numConditions-1)
-                xticklabels(hElectrodes, condVals)                
+                if protocolType == 3
+                    rescalePlots(hElectrodes, [0 numConditions+1 getYLims(hElectrodes)]);
+                    xticks(hElectrodes, 1:numConditions);
+                    xticklabels(hElectrodes, condVals);
+                else
+                    rescalePlots(hElectrodes, [0 numConditions-1 getYLims(hElectrodes)]);
+                    xticks(hElectrodes, 0:numConditions-1);
+                    xticklabels(hElectrodes, condVals);
+                end
                 title(hElectrodes,tuningTitle);
             end
             
-            xticks(hFR(max(numElectrodeGroups)), 0:numConditions-1)
-            xticklabels(hFR(max(numElectrodeGroups)), condVals)
-            xtickangle(hFR(max(numElectrodeGroups)), 90)
-            title(hFR(1),tuningTitle);  
+            for iGroup = 1:max(numElectrodeGroups)
+            if protocolType == 3
+                xticks(hFR(iGroup), 1:numConditions)
+                xticklabels(hFR(iGroup), condVals)
+            else
+                xticks(hFR(iGroup), 0:numConditions-1)
+                xticklabels(hFR(iGroup), condVals)
+            end
+            xtickangle(hFR(iGroup), 90)
+        end
+        
+        title(hFR(1),tuningTitle);
             
             if ~isSingleSession
                 xticklabels(hERP(max(numElectrodeGroups)), condVals) 
@@ -727,6 +977,18 @@ colorNames = jet(numConditions);
         zRange = [str2double(get(hZMin,'String')) str2double(get(hZMax,'String'))];
         rescaleZPlots(hDeltaTF,zRange);
     end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    function meanMax_Callback(src,~)
+
+        if get(src,'Value') == 1
+            set(src,'String','Mean');
+        else
+            set(src,'String','Max');
+        end
+
+    end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     function rescaleData_Callback(~,~)
@@ -758,6 +1020,51 @@ colorNames = jet(numConditions);
             end
         end
 
+    end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    function showPValues_Callback(~,~)
+
+        validGroups = find(~cellfun(@isempty, allPValues));
+
+        if isempty(validGroups)
+            msgbox('No p-values available. Plot the data first.', 'P-values');
+            return
+        end
+
+        pValueFig = figure( ...
+            'Name','Pairwise p-values', ...
+            'NumberTitle','off', ...
+            'Position',[300 100 900 700]);
+
+        tg = uitabgroup(pValueFig);
+
+        conditionLabels = arrayfun(@num2str, condVals, ...
+            'UniformOutput',false);
+
+        for k = 1:length(validGroups)
+
+            iGroup = validGroups(k);
+
+            % Assign the cell array to a temporary variable first
+            pValueCell = allPValues;
+            pMat = pValueCell{iGroup};
+
+            % Do not show diagonal as a statistical comparison
+            pMat(1:size(pMat,1)+1:end) = NaN;
+
+            groupName = string(groupNameList{idx}{iGroup});
+
+            tab = uitab(tg, 'Title',groupName);
+
+            uitable(tab, ...
+                'Data',pMat, ...
+                'ColumnName',conditionLabels, ...
+                'RowName',conditionLabels, ...
+                'Units','normalized', ...
+                'Position',[0.02 0.02 0.96 0.96]);
+        end
     end
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -885,7 +1192,7 @@ end
     end
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%c%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % load Data
 function [parameterCombinations,aValsUnique,eValsUnique,sValsUnique,fValsUnique,oValsUnique,cValsUnique,tValsUnique] = loadParameterCombinations(folderExtract)
 
@@ -926,3 +1233,5 @@ else
     impedanceValues = [];
 end
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
