@@ -536,13 +536,20 @@ end
             elseif protocolType == 2
                 a = 1; e = iCond; t = 1;
             end
-            
-            
+           
             numElectrodesInGroup = zeros(1, maxNumElectrodeGroups);
             for iGroup = 1:maxNumElectrodeGroups
                 clear tmpElectrodes
                 % Get data from electrodes                   
                 for session=1:size(electrodeGroupList,2)
+                    if protocolType == 3
+                        if effector == 1
+                        if a == 4 && session == 4
+                        continue;
+                        end
+                        end
+                    end
+                    
                     if iGroup > length(electrodeGroupList{session}) 
                         continue; 
                     end
@@ -581,6 +588,8 @@ end
                            else
                                 c=con;
                            end
+
+
                             
                             for k = 1:length(tmpElectrodes{session})
                                 tmpData = getDataGRF(allData{session,tmpElectrodes{session}(k)==goodElectrodes{session}},a,e,s,f,o,c,t,blRange,stRange,removeERPFlag);
@@ -686,12 +695,14 @@ end
            
 
             for iGroup=1:max(numElectrodeGroups)
+                
                 groupData = zeros(size(deltaPSDSlowGamma{iGroup,1},1),numConditions);                
                 for iCond=1:numConditions                
                     if isShowSpiking
                         groupData(:,iCond) = firingRateAllElecs{iGroup, iCond};
                     else
-                        groupData(:,iCond) = deltaPSDSlowGamma{iGroup,iCond};
+                        
+                        groupData(1:length(deltaPSDSlowGamma{iGroup,iCond}),iCond) = deltaPSDSlowGamma{iGroup,iCond};
                     end
                     
                 end            
@@ -718,13 +729,22 @@ end
                 end  
 
                 if ~isSingleSession
-                    ax = ancestor(hERP(iGroup), 'axes');            
+                    ax = ancestor(hERP(iGroup), 'axes');   
+                    if size(groupData,1) == 1
+                        
+                        scatter(hERP(iGroup),ones(size(groupData,1))*[1:12] , groupData, 10, colorNames, "filled")
+                        
+                    else
                     v = violinplot(ax, groupData);
                     hold(ax, 'on');
-                    for xt =1: numConditions
-                    v(xt).FaceColor = colorNames(xt,:);
-                    scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
+                        for xt = 1 : numConditions
+                        v(xt).FaceColor = colorNames(xt,:);
+                        scatter(hERP(iGroup),ones(size(groupData,1))*xt, groupData(:,xt), 10, colorNames(xt,:), "filled")
+                        end
+                        
                     end
+                    
+                    
                 end
 
                 % for xt = 1:numConditions
@@ -880,7 +900,19 @@ end
             end
             % Rescale plots to same scale
             rescalePlots(hFR, [0 numConditions getYLims(hFR)]);
-            rescalePlots(hERP,[0 numConditions getYLims(hERP)]);
+            rescalePlots(hERP,[1 numConditions getYLims(hERP)]);
+            
+            if protocolType == 3
+                rescalePlots(hERP,[1 numConditions getYLims(hERP)]);
+
+                xticks(hERP(max(numElectrodeGroups)), 1:numConditions);
+                xticklabels(hERP(max(numElectrodeGroups)), condVals);
+                xtickangle(hERP(max(numElectrodeGroups)), 90);
+            else
+            xticks(hERP(max(numElectrodeGroups)), 1:numConditions);
+            xticklabels(hERP(max(numElectrodeGroups)), condVals);
+            xtickangle(hERP(max(numElectrodeGroups)), 90);
+            end
 
             if singlePlotType == 2
                 if protocolType == 3
